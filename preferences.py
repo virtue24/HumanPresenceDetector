@@ -108,12 +108,12 @@ RELAY_KWARGS = {
     "human_presence_pin": 2,    # Pin number connected to relay for human presence
     "human_presence_delay_ms": 0,  # Delay before activating relay (ms)
     "human_presence_duration_ms": _cli_kwargs.get("RELAY_ON_DURATION_MS", 2000),  # Duration to keep relay active (ms)
-    "human_absence_pin": 3,   # Pin number connected to relay for human absence
+    "human_absence_pin": 4,   # Pin number connected to relay for human absence
     "human_absence_delay_ms": 0,   # Delay before activating relay (ms)
     "human_absence_duration_ms": _cli_kwargs.get("RELAY_ON_DURATION_MS", 2000),  # Duration to keep relay active (ms)
 }
     
-COOLDOWN_RANGE_PER_ITERATION = (0.00, 1.25)  # Range of cooldown time (in seconds) between each main loop iteration to reduce CPU usage
+COOLDOWN_RANGE_PER_ITERATION = (0.00, 2)  # Range of cooldown time (in seconds) between each main loop iteration to reduce CPU usage
 COOLDOWN_INCEMENT_PER_ITERATION = 0.025  # Increment cooldown by this much each iteration until max of COOLDOWN_RANGE_PER_ITERATION[1]
 
 USE_ARDUINO = True            # Whether to use Arduino module.
