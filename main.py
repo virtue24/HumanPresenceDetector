@@ -1,6 +1,8 @@
 import preferences
 import cv2, time
 
+# Initialize FastAPI server
+from api_server import StateAPIServer
 
 # Initialize the appropriate stream source based on user preferences
 stream_source = None
@@ -17,6 +19,10 @@ elif preferences.STREAM_SOURCE == "rtsp_streamer":
 from human_presence_detector import HumanPresenceDetector
 detector = HumanPresenceDetector(**preferences.HUMAN_PRESENCE_DETECTOR_KWARGS)
 
+# Initialize and start FastAPI server
+api_server = StateAPIServer(detector, stream_source, host="192.168.0.4", port=8000)
+api_server.start_server()
+
 # Start 
 while True:
     if stream_source.is_running():
@@ -26,6 +32,16 @@ while True:
 
         # Detect human presence
         current_state, human_presence_duration, human_absence_duration, debug_frame = detector.detect(frame)   
+        
+        # Update API server state (without altering the loop)
+        api_server.update_state(
+            current_state=current_state,
+            presence_duration=human_presence_duration,
+            absence_duration=human_absence_duration,
+            is_stream_running=stream_source.is_running(),
+            is_arduino_connected=False,
+            debug_frame=debug_frame
+        )
         
         # Show debug frame if enabled
         if preferences.SHOW_DEBUG_FRAME and debug_frame is not None:
