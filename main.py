@@ -1,52 +1,37 @@
-import cv2
+import preferences
+import cv2, time
+
+
+# Initialize the appropriate stream source based on user preferences
+stream_source = None
+if preferences.STREAM_SOURCE == "webcam":
+    from streamer_modules.webcam_streamer import WebcamStreamer
+    stream_source = WebcamStreamer(**preferences.STREAM_SOURCE_KWARGS["webcam"])
+    stream_source.start()
+
+elif preferences.STREAM_SOURCE == "rtsp_streamer":
+    from streamer_modules.rtsp_streamer import RTSPStreamer
+    stream_source = RTSPStreamer(**preferences.STREAM_SOURCE_KWARGS["rtsp_streamer"])
+
+# ınitialize the human presence detector
 from human_presence_detector import HumanPresenceDetector
+detector = HumanPresenceDetector(**preferences.HUMAN_PRESENCE_DETECTOR_KWARGS)
 
-if __name__ == "__main__":
-    detector:HumanPresenceDetector = HumanPresenceDetector(model_name="yolov8n.pt", conf_threshold=0.5, reset_time=3.0)
-
-    # open a webcam stream
-    cap = cv2.VideoCapture(1)
-    if not cap.isOpened():
-        print("Error: Could not open webcam.")
-        exit()
-
-    while True:
-        ret, frame = cap.read()
-        if not ret:
-            print("Error: Could not read frame.")
-            break
+# Start 
+while True:
+    if stream_source.is_running():
+        frame, timestamp = stream_source.get_frame_with_timestamp()
+        if frame is None:
+            continue        
 
         # Detect human presence
-        human_detected, presence_duration = detector.detect(frame)
-
-        # State logic
-        if presence_duration == 0:
-            state = "no_human"
-        elif presence_duration < 5:
-            state = "short_presence"
-        else:
-            state = "long_presence"
-
-        # Indicate state visually and textually
-        if state == "no_human":
-            color = (0, 255, 0)
-            cv2.putText(frame, "No Human", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, color, 2)
-        elif state == "short_presence":
-            color = (0, 255, 255)
-            cv2.rectangle(frame, (0, 0), (frame.shape[1], frame.shape[0]), color, 10)
-            cv2.putText(frame, f"Human Detected: {presence_duration:.1f}s", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, color, 2)
-            cv2.putText(frame, "State: Short Presence", (10, 70), cv2.FONT_HERSHEY_SIMPLEX, 1, color, 2)
-        elif state == "long_presence":
-            color = (0, 0, 255)
-            cv2.rectangle(frame, (0, 0), (frame.shape[1], frame.shape[0]), color, 10)
-            cv2.putText(frame, f"Human Detected: {presence_duration:.1f}s", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, color, 2)
-            cv2.putText(frame, "Alert! Long Presence", (10, 70), cv2.FONT_HERSHEY_SIMPLEX, 1, color, 2)
-
-        # Display the frame
-        cv2.imshow("Human Presence Detection", frame)
-
-        # Break the loop on 'q' key press
-        if cv2.waitKey(1) & 0xFF == ord('q'):
-            break
-
+        current_state, human_presence_duration, human_absence_duration, debug_frame = detector.detect(frame)   
+        
+        # Show debug frame if enabled
+        if preferences.SHOW_DEBUG_FRAME and debug_frame is not None:
+            cv2.imshow("Stream", debug_frame)
+            cv2.waitKey(1)            
+    else:
+        print("Stream source is not running.")
+        time.sleep(1)
 

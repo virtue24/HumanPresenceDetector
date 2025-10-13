@@ -1,21 +1,32 @@
 import cv2
 import threading
 import time
-from typing import Optional, Tuple
+from typing import Optional
 import numpy as np
 
-class WebcamStreamer:
-    def __init__(self, webcam_index: int = 0, fps: int = 30):
+class RTSPStreamer:
+    def __init__(self, ip_address: str, username: str, password: str, endpoint: str = "/stream", port: int = 554, fps: int = 30):
         """
-        Initialize the webcam streamer.
+        Initialize the RTSP streamer for CCTV camera.
         
         Args:
-            webcam_index (int): Index of the webcam to use
+            ip_address (str): IPv4 address of the CCTV camera
+            username (str): Username for RTSP authentication
+            password (str): Password for RTSP authentication
+            endpoint (str): RTSP endpoint path (default: "/stream")
+            port (int): RTSP port (default: 554)
             fps (int): Target frames per second for capture
         """
-        self.webcam_index = webcam_index
+        self.ip_address = ip_address
+        self.username = username
+        self.password = password
+        self.endpoint = endpoint
+        self.port = port
         self.fps = fps
         self.frame_delay = 1.0 / fps
+        
+        # Build RTSP URL
+        self.rtsp_url = f"rtsp://{username}:{password}@{ip_address}:{port}{endpoint}"
         
         # Threading components
         self._capture_thread = None
@@ -32,19 +43,19 @@ class WebcamStreamer:
         
     def start(self) -> bool:
         """
-        Start the webcam streaming thread.
+        Start the RTSP streaming thread.
         
         Returns:
             bool: True if successfully started, False otherwise
         """
         if self._is_running:
-            print("Webcam streamer is already running.")
+            print("RTSP streamer is already running.")
             return True
             
-        # Initialize webcam
-        self._cap = cv2.VideoCapture(self.webcam_index)
+        # Initialize RTSP connection
+        self._cap = cv2.VideoCapture(self.rtsp_url)
         if not self._cap.isOpened():
-            print(f"Error: Could not open webcam with index {self.webcam_index}")
+            print(f"Error: Could not open RTSP stream at {self.ip_address}")
             return False
             
         # Set camera properties for better performance
@@ -57,23 +68,23 @@ class WebcamStreamer:
         self._capture_thread.start()
         self._is_running = True
         
-        print(f"Webcam streamer started with index {self.webcam_index} at {self.fps} FPS")
+        print(f"RTSP streamer started for camera at {self.ip_address} at {self.fps} FPS")
         return True
         
     def stop(self):
-        """Stop the webcam streaming thread."""
+        """Stop the RTSP streaming thread."""
         if not self._is_running:
             return
             
         self._stop_event.set()
         if self._capture_thread and self._capture_thread.is_alive():
-            self._capture_thread.join(timeout=2.0)
+            self._capture_thread.join(timeout=3.0)
             
         if self._cap:
             self._cap.release()
             
         self._is_running = False
-        print("Webcam streamer stopped.")
+        print("RTSP streamer stopped.")
         
     def _capture_frames(self):
         """Internal method to capture frames in a separate thread."""
@@ -85,19 +96,19 @@ class WebcamStreamer:
                         self._last_frame = frame.copy()
                         self._frame_timestamp = time.time()
                 else:
-                    print("Warning: Failed to read frame from webcam")
-                    time.sleep(0.1)  # Brief pause before retrying
+                    print(f"Warning: Failed to read frame from RTSP stream {self.ip_address}")
+                    time.sleep(0.5)  # Longer pause for network streams before retrying
                     
                 # Control frame rate
                 time.sleep(self.frame_delay)
                 
             except Exception as e:
-                print(f"Error in frame capture: {e}")
-                break
+                print(f"Error in RTSP frame capture: {e}")
+                time.sleep(1.0)  # Wait before retrying on error
                 
     def get_last_frame(self) -> Optional[np.ndarray]:
         """
-        Get the most recent frame from the webcam.
+        Get the most recent frame from the RTSP stream.
         
         Returns:
             Optional[np.ndarray]: The last captured frame, or None if no frame available
@@ -107,7 +118,7 @@ class WebcamStreamer:
                 return self._last_frame.copy()
             return None
             
-    def get_frame_with_timestamp(self) -> Tuple[Optional[np.ndarray], float]:
+    def get_frame_with_timestamp(self) -> tuple[Optional[np.ndarray], float]:
         """
         Get the most recent frame along with its timestamp.
         
@@ -122,22 +133,30 @@ class WebcamStreamer:
         """Check if the streamer is currently running."""
         return self._is_running
         
-    def get_webcam_info(self) -> dict:
+    def get_stream_info(self) -> dict:
         """
-        Get information about the webcam.
+        Get information about the RTSP stream.
         
         Returns:
-            dict: Dictionary containing webcam properties
+            dict: Dictionary containing stream properties
         """
-        if not self._cap or not self._cap.isOpened():
-            return {}
-            
-        return {
-            'width': int(self._cap.get(cv2.CAP_PROP_FRAME_WIDTH)),
-            'height': int(self._cap.get(cv2.CAP_PROP_FRAME_HEIGHT)),
-            'fps': self._cap.get(cv2.CAP_PROP_FPS),
-            'backend': self._cap.getBackendName()
+        info = {
+            'ip_address': self.ip_address,
+            'port': self.port,
+            'endpoint': self.endpoint,
+            'rtsp_url': self.rtsp_url.replace(f"{self.username}:{self.password}@", "***:***@"),  # Hide credentials
+            'is_running': self._is_running
         }
+        
+        if self._cap and self._cap.isOpened():
+            info.update({
+                'width': int(self._cap.get(cv2.CAP_PROP_FRAME_WIDTH)),
+                'height': int(self._cap.get(cv2.CAP_PROP_FRAME_HEIGHT)),
+                'fps': self._cap.get(cv2.CAP_PROP_FPS),
+                'backend': self._cap.getBackendName()
+            })
+            
+        return info
         
     def __enter__(self):
         """Context manager entry."""
@@ -152,14 +171,23 @@ class WebcamStreamer:
         """Destructor to ensure cleanup."""
         self.stop()
 
+
 if __name__ == "__main__":
-    streamer = WebcamStreamer(webcam_index=0, fps=30)
+    # Example usage
+    streamer = RTSPStreamer(
+        ip_address="192.168.1.100",
+        username="admin", 
+        password="password123",
+        endpoint="/stream1",
+        fps=25
+    )
+    
     if streamer.start():
         try:
             while True:
                 frame = streamer.get_last_frame()
                 if frame is not None:
-                    cv2.imshow("Webcam Stream", frame)
+                    cv2.imshow("RTSP Stream", frame)
                     
                 if cv2.waitKey(1) & 0xFF == ord('q'):
                     break
