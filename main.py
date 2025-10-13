@@ -30,6 +30,8 @@ if preferences.USE_ARDUINO:
     arduino_module = ArduinoController(**preferences.ARDUINO_KWARGS)
 
 # Start 
+
+current_cooldown = 0.0
 while True:
     time.sleep(preferences.COOLDOWN_PER_ITERATION)  # Cooldown to reduce CPU usage
 
@@ -55,14 +57,17 @@ while True:
             # Trigger relay if Human presence detected
             if current_state == "human_present":
                 response = arduino_module.relay_on_overwrite(pin=preferences.RELAY_KWARGS['human_presence_pin'], duration_ms=preferences.RELAY_KWARGS['human_presence_duration_ms'])
-                print(f"Arduino relay response: {response}")
+                current_cooldown = preferences.COOLDOWN_RANGE_PER_ITERATION[0]  # Reset cooldown to minimum
+                print(f"Arduino relay response: {response}, current_cooldown: {current_cooldown}")
             elif current_state == "changing_to_absent" or current_state == "changing_to_present":
                 response_1 = arduino_module.relay_on_overwrite(pin=preferences.RELAY_KWARGS['human_presence_pin'], duration_ms=preferences.RELAY_KWARGS['human_presence_duration_ms'])
                 response_2 = arduino_module.relay_on_overwrite(pin=preferences.RELAY_KWARGS['human_absence_pin'], duration_ms=preferences.RELAY_KWARGS['human_absence_duration_ms'])
+                current_cooldown = preferences.COOLDOWN_RANGE_PER_ITERATION[0]  # Reset cooldown to minimum
                 print(f"Arduino relay response: {response_1}, {response_2}")
             elif current_state == "human_absent":
                 response = arduino_module.relay_on_overwrite(pin=preferences.RELAY_KWARGS['human_absence_pin'], duration_ms=preferences.RELAY_KWARGS['human_absence_duration_ms'])
-                print(f"Arduino relay response: {response}")
+                current_cooldown = min(current_cooldown + preferences.COOLDOWN_INCEMENT_PER_ITERATION, preferences.COOLDOWN_RANGE_PER_ITERATION[1])
+                print(f"Arduino relay response: {response}, current_cooldown: {current_cooldown}")
             elif False:
                 #TODO: if test is triggered, do testing then reset flag.
                 pass

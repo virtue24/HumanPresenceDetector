@@ -113,7 +113,9 @@ RELAY_KWARGS = {
     "human_absence_duration_ms": _cli_kwargs.get("RELAY_ON_DURATION_MS", 2000),  # Duration to keep relay active (ms)
 }
     
-COOLDOWN_PER_ITERATION = 0.100  # Cooldown time between loop iterations (seconds)
+COOLDOWN_RANGE_PER_ITERATION = (0.00, 1.25)  # Range of cooldown time (in seconds) between each main loop iteration to reduce CPU usage
+COOLDOWN_INCEMENT_PER_ITERATION = 0.025  # Increment cooldown by this much each iteration until max of COOLDOWN_RANGE_PER_ITERATION[1]
+
 USE_ARDUINO = True            # Whether to use Arduino module.
 SHOW_DEBUG_FRAME = False  # Whether to show debug frame with drawings.
 
