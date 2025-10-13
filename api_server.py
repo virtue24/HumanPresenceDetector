@@ -37,6 +37,9 @@ class StateAPIServer:
 
         self.debug_frame:np.ndarray = np.zeros((1,1,3), dtype=np.uint8)
         
+        # Relay trigger state
+        self.relay_trigger_pin: Optional[int] = None
+        
         # FastAPI app
         self.app = FastAPI(title="Human Presence Detection API", version="1.0.0")
         self._setup_routes()
@@ -83,6 +86,24 @@ class StateAPIServer:
 
             return StreamingResponse(BytesIO(jpeg.tobytes()), media_type="image/jpeg")
         
+        @self.app.get("/trigger_relay")
+        async def trigger_relay(pin: int):
+            """Trigger relay on specified pin."""
+            try:
+                # Validate pin number
+                if pin < 0 or pin > 255:
+                    raise HTTPException(status_code=400, detail="Invalid pin number")
+                
+                # Set the trigger pin - main loop will handle it
+                self.relay_trigger_pin = pin
+                
+                return {
+                    "message": f"Relay trigger queued for pin {pin}",
+                    "pin": pin,
+                    "timestamp": time.time()
+                }
+            except Exception as e:
+                raise HTTPException(status_code=500, detail=str(e))
     
     def update_state(self, current_state: str, presence_duration: float, absence_duration: float, 
                     is_stream_running: bool = True, is_arduino_connected: bool = False, debug_frame:np.ndarray = np.zeros((1,1,3), dtype=np.uint8)):
@@ -109,6 +130,19 @@ class StateAPIServer:
         }
 
         self.debug_frame = debug_frame
+    
+    def get_and_clear_relay_trigger(self) -> Optional[int]:
+        """
+        Get the relay trigger pin and clear it.
+        
+        Returns:
+            int: Pin number to trigger, or None if no trigger pending
+        """
+        if self.relay_trigger_pin is not None:
+            pin = self.relay_trigger_pin
+            self.relay_trigger_pin = None  # Clear after getting
+            return pin
+        return None
     
     def start_server(self):
         """Start the FastAPI server in a separate thread."""

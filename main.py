@@ -54,6 +54,13 @@ while True:
         )
 
         if arduino_module:
+            # Check for API relay trigger requests
+            trigger_pin = api_server.get_and_clear_relay_trigger()
+            if trigger_pin is not None:
+                print(f"API relay trigger requested for pin {trigger_pin}")
+                response = arduino_module.relay_on(pin=trigger_pin, duration_ms=3000)  # 3 second default
+                print(f"API relay trigger response: {response}")
+            
             # Trigger relay if Human presence detected
             if current_state == "human_present":
                 response = arduino_module.relay_on_overwrite(pin=preferences.RELAY_KWARGS['human_presence_pin'], duration_ms=preferences.RELAY_KWARGS['human_presence_duration_ms'])
