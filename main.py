@@ -20,7 +20,7 @@ from human_presence_detector import HumanPresenceDetector
 detector = HumanPresenceDetector(**preferences.HUMAN_PRESENCE_DETECTOR_KWARGS)
 
 # Initialize and start FastAPI server
-api_server = StateAPIServer(detector, stream_source, host="192.168.0.2", port=8000)
+api_server = StateAPIServer(detector, stream_source, host=preferences.IPV4_ADDRESS, port=preferences.BACKEND_SERVER_PORT)
 api_server.start_server()
 
 # Import Arduino module if enabled
