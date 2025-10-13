@@ -31,9 +31,9 @@ if preferences.USE_ARDUINO:
 
 # Start 
 
-current_cooldown = 0.0
+current_cooldown = preferences.COOLDOWN_RANGE_PER_ITERATION[0]
 while True:
-    time.sleep(preferences.COOLDOWN_PER_ITERATION)  # Cooldown to reduce CPU usage
+    time.sleep(current_cooldown) # Cooldown to reduce CPU usage
 
     if stream_source.is_running():
         frame, timestamp = stream_source.get_frame_with_timestamp()
