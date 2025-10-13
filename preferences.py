@@ -51,6 +51,8 @@ ALLOWED_CLI_ARGS = [
     'RTSP_USERNAME',
     'RTSP_PASSWORD',
 
+    'RELAY_ON_DURATION_MS',
+
     ]
 
 MUST_HAVE_CLI_ARGS = []
@@ -105,10 +107,10 @@ ARDUINO_KWARGS = {
 RELAY_KWARGS = {
     "human_presence_pin": 2,    # Pin number connected to relay for human presence
     "human_presence_delay_ms": 0,  # Delay before activating relay (ms)
-    "human_presence_duration_ms": 1000,  # Duration to keep relay active (ms)
+    "human_presence_duration_ms": _cli_kwargs.get("RELAY_ON_DURATION_MS", 2000),  # Duration to keep relay active (ms)
     "human_absence_pin": 3,   # Pin number connected to relay for human absence
     "human_absence_delay_ms": 0,   # Delay before activating relay (ms)
-    "human_absence_duration_ms": 1000  # Duration to keep relay active (ms)
+    "human_absence_duration_ms": _cli_kwargs.get("RELAY_ON_DURATION_MS", 2000),  # Duration to keep relay active (ms)
 }
     
 COOLDOWN_PER_ITERATION = 0.100  # Cooldown time between loop iterations (seconds)
