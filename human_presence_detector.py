@@ -127,8 +127,6 @@ class HumanPresenceDetector:
 
         return False
     
-    #    def draw_debug_info(self, frame, human_bboxes, polygon_points, current_state):
-
     def draw_debug_frame(self, frame, human_bboxes: List, polygon_points: List[Tuple[int, int]], current_state: str):
         """Draw bounding boxes and polygon for debugging."""
         copied_frame = frame.copy()

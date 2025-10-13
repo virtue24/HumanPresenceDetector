@@ -22,7 +22,21 @@ HUMAN_PRESENCE_DETECTOR_KWARGS = {
     "t2_threshold": 1.0          # Time in seconds to confirm human absence  (presence to absence)
 }
 
-SHOW_DEBUG_FRAME = True  # Whether to show debug frame with drawings.
+ARDUINO_KWARGS = {
+    "baud_rate": 9600,           # Serial baud rate
+}
+RELAY_KWARGS = {
+    "human_presence_pin": 2,    # Pin number connected to relay for human presence
+    "human_presence_delay_ms": 0,  # Delay before activating relay (ms)
+    "human_presence_duration_ms": 1000,  # Duration to keep relay active (ms)
+    "human_absence_pin": 3,   # Pin number connected to relay for human absence
+    "human_absence_delay_ms": 0,   # Delay before activating relay (ms)
+    "human_absence_duration_ms": 1000  # Duration to keep relay active (ms)
+}
+    
+COOLDOWN_PER_ITERATION = 0.100  # Cooldown time between loop iterations (seconds)
+USE_ARDUINO = True            # Whether to use Arduino module.
+SHOW_DEBUG_FRAME = False  # Whether to show debug frame with drawings.
 
 # VALIDATION ======================
 # Basic validation of preferences
