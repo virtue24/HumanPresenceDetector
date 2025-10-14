@@ -126,6 +126,10 @@ class ArduinoController:
         Returns:
             "OK", "BUSY", or "ERR"
         """
+        duration_ms = int(duration_ms)
+        if duration_ms <= 0:
+            raise ValueError("duration_ms must be a positive integer")
+        
         command = f"RELAY_ON;{pin};{delay_ms};{duration_ms}"
         response = self._send_command(command)
         
@@ -148,6 +152,10 @@ class ArduinoController:
         Returns:
             "OK", "BUSY", or "ERR"
         """
+        duration_ms = int(duration_ms)
+        if duration_ms <= 0:
+            raise ValueError("duration_ms must be a positive integer")
+        
         command = f"RELAY_ON_OVERWRITE;{pin};{delay_ms};{duration_ms}"
         response = self._send_command(command)
         

@@ -39,6 +39,9 @@ class HumanPresenceDetector:
         self.state_start_time = time.time()
         self.last_detection_time = None
 
+    def update_polygon_points(self, polygon_points: List[Tuple[float, float]]):
+        self.polygon_points = polygon_points
+
     def is_polygons_intersecting(self, polygon1: List[Tuple[float, float]], polygon2: List[Tuple[float, float]]) -> bool:
         """
         Robust polygon intersection check for simple polygons (convex or concave).

@@ -4,11 +4,15 @@ import uvicorn
 import threading
 import time
 import numpy as np
-from typing import Optional
+from typing import Optional, Tuple, List
 import cv2
 from fastapi.responses import StreamingResponse
 from io import BytesIO
-""
+from pydantic import BaseModel
+
+class PolygonPointsRequest(BaseModel):
+    points: List[List[float]]
+
 class StateAPIServer:
     def __init__(self, detector, stream_source, host: str = "0.0.0.0", port: int = 8000):
         """
@@ -24,6 +28,7 @@ class StateAPIServer:
         self.stream_source = stream_source
         self.host = host
         self.port = port
+        self.start_time = time.time()
         
         # State storage - updated by main loop
         self.current_state_data = {
@@ -39,6 +44,9 @@ class StateAPIServer:
         
         # Relay trigger state
         self.relay_trigger_pin: Optional[int] = None
+        
+        # Polygon points update state
+        self.polygon_points_updated: tuple[bool, Optional[list]] = (False, None)
         
         # FastAPI app
         self.app = FastAPI(title="Human Presence Detection API", version="1.0.0")
@@ -64,13 +72,12 @@ class StateAPIServer:
         async def get_status():
             """Get system status."""
             return {
+                "api_server_running": self.is_running,
                 "is_stream_running": self.current_state_data['is_stream_running'],
                 "is_arduino_connected": self.current_state_data['is_arduino_connected'],
-                "api_server_running": self.is_running,
-                "timestamp": self.current_state_data['timestamp'],
-                "server_timestamp": time.time()            }
+                "server_uptime_sec": time.time() - self.start_time,              
+            }
         
-
                 
         @self.app.get("/get_frame")
         async def get_debug_frame():
@@ -104,9 +111,63 @@ class StateAPIServer:
                 }
             except Exception as e:
                 raise HTTPException(status_code=500, detail=str(e))
+        
+        @self.app.post("/update_polygon_points")
+        async def update_polygon_points(request: PolygonPointsRequest):
+            """
+            Update polygon points for detection area.
+
+            Args:
+                request: PolygonPointsRequest containing list of [x, y] points
+
+            Example json body is; 
+            {
+              "points": [
+                [0.0, 0.0],
+                [1.0, 0.0], 
+                [1.0, 1.0],
+                [0.0, 1.0]
+              ]
+            }
+            """
+
+            try:
+                points = request.points
+                
+                # Validate points format
+                if not isinstance(points, list) or len(points) < 3:
+                    raise HTTPException(status_code=400, detail="At least 3 points required for polygon")
+                
+                validated_points = []
+                for i, point in enumerate(points):
+                    if not isinstance(point, (list, tuple)) or len(point) != 2:
+                        raise HTTPException(status_code=400, detail=f"Point {i} must be [x, y] format")
+                    
+                    x, y = point
+                    if not isinstance(x, (int, float)) or not isinstance(y, (int, float)):
+                        raise HTTPException(status_code=400, detail=f"Point {i} coordinates must be numbers")
+                    
+                    if not (0.0 <= x <= 1.0) or not (0.0 <= y <= 1.0):
+                        raise HTTPException(status_code=400, detail=f"Point {i} coordinates must be normalized (0.0-1.0)")
+                    
+                    validated_points.append((float(x), float(y)))
+                
+                # Set the update flag with new points
+                self.polygon_points_updated = (True, validated_points)
+                
+                return {
+                    "message": f"Polygon points updated successfully",
+                    "points": validated_points,
+                    "point_count": len(validated_points),
+                    "timestamp": time.time()
+                }
+            except HTTPException:
+                raise
+            except Exception as e:
+                raise HTTPException(status_code=500, detail=str(e))
     
     def update_state(self, current_state: str, presence_duration: float, absence_duration: float, 
-                    is_stream_running: bool = True, is_arduino_connected: bool = False, debug_frame:np.ndarray = np.zeros((1,1,3), dtype=np.uint8)):
+                    is_stream_running: bool = True, is_arduino_connected: bool = False, debug_frame:np.ndarray = np.zeros((1,1,3), dtype=np.uint8), current_cooldown_sec: float = 0):
         """
         Update the current state data. Called from main detection loop.
         
@@ -116,6 +177,7 @@ class StateAPIServer:
             absence_duration: Human absence duration  
             is_stream_running: Stream source status
             is_arduino_connected: Arduino connection status
+            current_cooldown_sec: Current cooldown duration in seconds
 
             debug_frame: Debug frame with drawings
         """
@@ -126,7 +188,8 @@ class StateAPIServer:
             'human_absence_duration': absence_duration,
             'is_stream_running': is_stream_running,
             'is_arduino_connected': is_arduino_connected,
-            'timestamp': time.time()
+            'timestamp': time.time(),
+            'current_cooldown_sec': current_cooldown_sec
         }
 
         self.debug_frame = debug_frame
@@ -143,6 +206,20 @@ class StateAPIServer:
             self.relay_trigger_pin = None  # Clear after getting
             return pin
         return None
+    
+    def get_and_clear_polygon_update(self) -> Tuple[bool, Optional[list]]:
+        """
+        Get the polygon points update flag and new points, then clear the flag.
+        
+        Returns:
+            tuple: (is_updated, new_polygon_points) where is_updated is bool and 
+                   new_polygon_points is list of tuples or None
+        """
+        if self.polygon_points_updated[0]:  # If update flag is True
+            is_updated, new_points = self.polygon_points_updated
+            self.polygon_points_updated = (False, None)  # Clear after getting
+            return is_updated, new_points
+        return False, None
     
     def start_server(self):
         """Start the FastAPI server in a separate thread."""

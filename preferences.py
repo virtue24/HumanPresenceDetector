@@ -1,11 +1,9 @@
 from ultralytics import settings
 settings.update({"sync": False}) # Disable analytics and crash reporting
 
-
 from pathlib import Path
-import sys, psutil, logging, time
-import os, re, uuid, hashlib, platform, subprocess
-from typing import List
+import sys, psutil
+import json
 
 def get_kwargs_from_cli(allowed_args=None):
     """
@@ -53,7 +51,11 @@ ALLOWED_CLI_ARGS = [
 
     'RELAY_ON_DURATION_MS',
 
-    ]
+    'MODEL_CONFIDENCE_THRESHOLD',
+    'T1_THRESHOLD',
+    'T2_THRESHOLD',
+
+]
 
 MUST_HAVE_CLI_ARGS = []
 _cli_kwargs = get_kwargs_from_cli(allowed_args=ALLOWED_CLI_ARGS)
@@ -83,8 +85,9 @@ BACKEND_SERVER_PORT :int = int(_cli_kwargs.get('BACKEND_SERVER_PORT', 8000))  # 
 STREAM_SOURCE = "webcam"  # Options: "webcam", "rtsp_streamer"
 STREAM_SOURCE_KWARGS = {
  "webcam": {     
-    "webcam_index": _cli_kwargs.get("WEBCAM_INDEX", 0),  # Default to 0 if not provided
+    "webcam_index": int(_cli_kwargs.get("WEBCAM_INDEX", 0)),  # Default to 0 if not provided
  },
+
  "rtsp_streamer": {
     "ipv4_address": _cli_kwargs.get("RTSP_IP_ADDRESS", "0.0.0.0"),  # Default to
     "endpoint": _cli_kwargs.get("RTSP_ENDPOINT", "/stream"),
@@ -93,12 +96,50 @@ STREAM_SOURCE_KWARGS = {
  }
 }
 
+# read a text file where each point is in the format 0.x,0.y at each line
+POLYGON_POINTS_FILE = Path(__file__).resolve().parent / 'configs' / 'polygon_points.txt'
+# create the file if it doesn't exist
+POLYGON_POINTS_FILE.parent.mkdir(parents=True, exist_ok=True)
+if not POLYGON_POINTS_FILE.exists():
+    with open(POLYGON_POINTS_FILE, 'w') as f:
+        f.write("0.0,0.0\n1.0,0.0\n1.0,1.0\n0.0,1.0")  # Default to full frame
+        
+POLYGON_POINTS = []
+with open(POLYGON_POINTS_FILE, 'r') as f:
+    file_lines = f.readlines()
+    for line in file_lines:
+        try:
+            x_str, y_str = line.strip().split(",")
+            x, y = float(x_str), float(y_str)
+            if x < 0.0 or x > 1.0 or y < 0.0 or y > 1.0:
+                raise ValueError(f"Polygon point ({x}, {y}) must be normalized between 0 and 1.")
+            POLYGON_POINTS.append((x, y))
+        except:
+            raise ValueError(f"Invalid POLYGON_POINTS format in file: '{line.strip()}'. Must be in 'x,y' format with normalized float values between 0 and 1.")
+    
+    if len(POLYGON_POINTS) == 0:
+        print(f"Warning: No valid polygon points found in {POLYGON_POINTS_FILE}. Defaulting to full frame.")
+        # Default to full frame if no points provided
+        POLYGON_POINTS = [(0.0, 0.0), (1.0, 0.0), (1.0, 1.0), (0.0, 1.0)]
+        # export these default points to the file
+        with open(POLYGON_POINTS_FILE, 'w') as fw:
+            fw.write("\n".join([f"{x},{y}" for x, y in POLYGON_POINTS]))
+    elif len(POLYGON_POINTS) < 3:
+        # Default to full frame if less than 3 points provided
+        print(f"Warning: Less than 3 polygon points found in {POLYGON_POINTS_FILE}. Defaulting to full frame.")
+        POLYGON_POINTS = [(0.0, 0.0), (1.0, 0.0), (1.0, 1.0), (0.0, 1.0)]
+        with open(POLYGON_POINTS_FILE, 'w') as fw:
+            fw.write("\n".join([f"{x},{y}" for x, y in POLYGON_POINTS]))
+    else:
+        print(f"Loaded {len(POLYGON_POINTS)} polygon points from {POLYGON_POINTS_FILE}: {POLYGON_POINTS}")  
+
+
 HUMAN_PRESENCE_DETECTOR_KWARGS = {
     "model_name": "yolov8s.pt",  # Model file name
-    "conf_threshold": 0.60,       # Confidence threshold for detections
-    "polygon_points": [(0.25, 0.25), (0.75, 0.25), (0.75, 0.75), (0.25, 0.75), (0.45, 0.45)], # Defaulted to whole frame if empty.
-    "t1_threshold": 1.0,         # Time in seconds to confirm human presence (absence to presence)
-    "t2_threshold": 1.0          # Time in seconds to confirm human absence  (presence to absence)
+    "conf_threshold":  float(_cli_kwargs.get("MODEL_CONFIDENCE_THRESHOLD", 0.60)),      # Confidence threshold for detections
+    "polygon_points": POLYGON_POINTS,                                                   # Defaulted to whole frame if empty.
+    "t1_threshold": float(_cli_kwargs.get("T1_THRESHOLD", 1.0)),                        # Time in seconds to confirm human presence (absence to presence)
+    "t2_threshold": float(_cli_kwargs.get("T2_THRESHOLD", 1.0)),                        # Time in seconds to confirm human absence  (presence to absence)
 }
 
 ARDUINO_KWARGS = {
@@ -106,18 +147,16 @@ ARDUINO_KWARGS = {
 }
 RELAY_KWARGS = {
     "human_presence_pin": 2,    # Pin number connected to relay for human presence
-    "human_presence_delay_ms": 0,  # Delay before activating relay (ms)
-    "human_presence_duration_ms": _cli_kwargs.get("RELAY_ON_DURATION_MS", 2000),  # Duration to keep relay active (ms)
     "human_absence_pin": 3,   # Pin number connected to relay for human absence
-    "human_absence_delay_ms": 0,   # Delay before activating relay (ms)
-    "human_absence_duration_ms": _cli_kwargs.get("RELAY_ON_DURATION_MS", 5000),  # Duration to keep relay active (ms)
+    "system_is_working_fine_pin": 5,        # Pin number connected to relay for system ON signal
 }
     
-COOLDOWN_RANGE_PER_ITERATION = (0.00, 2.00)  # Range of cooldown time (in seconds) between each main loop iteration to reduce CPU usage
-COOLDOWN_INCEMENT_PER_ITERATION = 0.025  # Increment cooldown by this much each iteration until max of COOLDOWN_RANGE_PER_ITERATION[1]
+COOLDOWN_RANGE_PER_ITERATION = (0.00, 2.5)  # Range of cooldown time (in seconds) between each main loop iteration to reduce CPU usage
+COOLDOWN_INCEMENT_PER_ITERATION = 0.050     # Increment cooldown by this much each iteration until max of COOLDOWN_RANGE_PER_ITERATION[1]
+RELAY_ON_TIME_ADJUSTMENT_SEC = 0.5              # Add this much time (ms) from relay on duration to account for Arduino processing delay
 
-USE_ARDUINO = True            # Whether to use Arduino module.
-SHOW_DEBUG_FRAME = False  # Whether to show debug frame with drawings.
+USE_ARDUINO = True                          # Whether to use Arduino module.
+SHOW_DEBUG_FRAME = False                    # Whether to show debug frame as cv2 frame with drawings.
 
 # VALIDATION ======================
 # Basic validation of preferences
