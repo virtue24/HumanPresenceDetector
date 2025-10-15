@@ -32,7 +32,7 @@ if preferences.USE_ARDUINO:
 # Start 
 current_cooldown_sec = preferences.COOLDOWN_RANGE_PER_ITERATION[0]
 while True:
-
+    detection_start_time = time.time()
     if stream_source.is_running():
         frame, timestamp = stream_source.get_frame_with_timestamp()
         if frame is None:
@@ -71,10 +71,11 @@ while True:
             current_cooldown_sec = preferences.COOLDOWN_RANGE_PER_ITERATION[0]  # Reset cooldown to minimum
         elif current_state == "human_absent":
             current_cooldown_sec = min(current_cooldown_sec + preferences.COOLDOWN_INCEMENT_PER_ITERATION, preferences.COOLDOWN_RANGE_PER_ITERATION[1])
-
+        detection_end_time = time.time()
+        detection_duration = detection_end_time - detection_start_time
         # Handle Arduino relay control if module is available
         if arduino_module:
-            _relay_on_duration_ms = 1000* (current_cooldown_sec + preferences.RELAY_ON_TIME_ADJUSTMENT_SEC)
+            _relay_on_duration_ms = 1000* (current_cooldown_sec + preferences.RELAY_ON_TIME_ADJUSTMENT_SEC + detection_duration)
 
             # Check for API relay trigger requests (For testing, this is useful)
             trigger_pin = api_server.get_and_clear_relay_trigger()
