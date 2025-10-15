@@ -72,9 +72,11 @@ if (PREFERRED_NETWORK_INTERFACE is not None) and (PREFERRED_NETWORK_IPV4 is not 
     raise ValueError("Only one of PREFERRED_NETWORK_INTERFACE or PREFERRED_NETWORK_IPV4 should be provided, not both.")
 if PREFERRED_NETWORK_INTERFACE is not None:
     if PREFERRED_NETWORK_INTERFACE not in get_all_ipv4s().keys():
+        IPV4_ADDRESS = "0.0.0.0"
         print(f"Be sure to provide the correct network interface name as PREFERRED_NETWORK_INTERFACE. Available interfaces: {list(get_all_ipv4s().keys())}")
-        #raise ValueError(f"Provided PREFERRED_NETWORK_INTERFACE '{PREFERRED_NETWORK_INTERFACE}' not found in available interfaces: {list(get_all_ipv4s().keys())}")
-    IPV4_ADDRESS = get_all_ipv4s()[PREFERRED_NETWORK_INTERFACE]
+        print(f"Defaulting to listen on all interfaces (0.0.0.0).")
+    else:
+        IPV4_ADDRESS = get_all_ipv4s()[PREFERRED_NETWORK_INTERFACE]
 if PREFERRED_NETWORK_IPV4 is not None:
     if PREFERRED_NETWORK_IPV4 not in get_all_ipv4s().values():
         raise ValueError(f"Provided PREFERRED_NETWORK_IPV4 '{PREFERRED_NETWORK_IPV4}' not found in available IPv4s: {list(get_all_ipv4s().values())}")
